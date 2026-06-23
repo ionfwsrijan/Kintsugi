@@ -10,6 +10,10 @@ Local civic issues are usually reported through fragmented channels with poor vi
 
 `Citizen report → AI triage → community verification → department routing → status tracking → impact measurement`
 
+## Screenshot
+
+<img width="1896" height="897" alt="Screenshot 2026-06-23 162211" src="https://github.com/user-attachments/assets/11018720-54f1-4636-a4f5-208b3dd05ef3" />
+
 ## Key features
 
 - Photo/video-first issue reporting flow
