@@ -14,6 +14,8 @@ import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from "recharts";
+import { api } from "./lib/api";
+import { firebaseConfigured } from "./lib/firebase";
 
 // ─── GLOBAL STYLES ──────────────────────────────────────────────────────────
 const STYLES = `
@@ -168,6 +170,173 @@ const STYLES = `
   input:focus, textarea:focus { outline: none; }
 `;
 
+function svgDataUri(svg: string) {
+  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
+}
+
+function createIssueVisual(category: "Water" | "Electricity" | "Waste" | "Roads" | "Drainage") {
+  const visuals: Record<typeof category, string> = {
+    Water: svgDataUri(`
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" fill="none">
+        <defs>
+          <linearGradient id="bg" x1="120" y1="0" x2="1080" y2="800" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#091120" />
+            <stop offset="0.55" stop-color="#11264A" />
+            <stop offset="1" stop-color="#2563EB" />
+          </linearGradient>
+          <linearGradient id="road" x1="0" y1="500" x2="1200" y2="500" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#F8FAFC" />
+            <stop offset="1" stop-color="#CBD5E1" />
+          </linearGradient>
+          <linearGradient id="leak" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#7DD3FC" />
+            <stop offset="1" stop-color="#0EA5E9" />
+          </linearGradient>
+        </defs>
+        <rect width="1200" height="800" rx="48" fill="url(#bg)" />
+        <circle cx="995" cy="140" r="220" fill="#60A5FA" opacity="0.08" />
+        <circle cx="190" cy="180" r="180" fill="#93C5FD" opacity="0.08" />
+        <rect x="0" y="540" width="1200" height="260" fill="url(#road)" />
+        <path d="M0 548H1200" stroke="#94A3B8" stroke-opacity="0.25" stroke-width="6" />
+        <path d="M126 584H1074" stroke="#E2E8F0" stroke-width="12" stroke-dasharray="82 52" />
+        <path d="M0 660H1200" stroke="#CBD5E1" stroke-opacity="0.5" stroke-width="3" />
+        <path d="M490 470C520 438 560 426 612 426C656 426 695 444 724 476L787 544H420L490 470Z" fill="#0F172A" opacity="0.85" />
+        <path d="M612 224C576 308 552 366 540 404" stroke="#BAE6FD" stroke-width="20" stroke-linecap="round" />
+        <path d="M612 224C576 308 552 366 540 404" stroke="#7DD3FC" stroke-width="10" stroke-linecap="round" />
+        <path d="M556 348C520 348 492 378 492 414C492 450 520 480 556 480C592 480 620 450 620 414C620 378 592 348 556 348Z" fill="#0EA5E9" opacity="0.14" />
+        <path d="M556 348C520 348 492 378 492 414C492 450 520 480 556 480C592 480 620 450 620 414C620 378 592 348 556 348Z" stroke="#38BDF8" stroke-width="8" />
+        <path d="M760 356C760 332 778 314 802 314C826 314 844 332 844 356C844 382 822 402 802 432C782 402 760 382 760 356Z" fill="url(#leak)" />
+        <path d="M840 392C856 392 870 406 870 422C870 442 852 452 840 470C828 452 810 442 810 422C810 406 824 392 840 392Z" fill="#38BDF8" opacity="0.9" />
+        <path d="M366 462C402 430 438 416 476 414" stroke="#F8FAFC" stroke-width="6" stroke-linecap="round" opacity="0.5" />
+        <rect x="162" y="160" width="150" height="190" rx="20" fill="#0F172A" opacity="0.45" />
+        <rect x="186" y="182" width="34" height="40" rx="8" fill="#1D4ED8" opacity="0.7" />
+        <rect x="230" y="182" width="34" height="40" rx="8" fill="#1D4ED8" opacity="0.48" />
+        <rect x="186" y="236" width="78" height="28" rx="8" fill="#E2E8F0" opacity="0.26" />
+        <rect x="978" y="180" width="118" height="150" rx="18" fill="#0F172A" opacity="0.38" />
+        <rect x="1000" y="202" width="28" height="34" rx="8" fill="#2563EB" opacity="0.65" />
+        <rect x="1036" y="202" width="28" height="34" rx="8" fill="#2563EB" opacity="0.45" />
+      </svg>
+    `),
+    Electricity: svgDataUri(`
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" fill="none">
+        <defs>
+          <linearGradient id="bg" x1="140" y1="0" x2="1060" y2="800" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#050816" />
+            <stop offset="0.55" stop-color="#0B1220" />
+            <stop offset="1" stop-color="#1D4ED8" />
+          </linearGradient>
+          <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stop-color="#93C5FD" stop-opacity="0.9" />
+            <stop offset="1" stop-color="#93C5FD" stop-opacity="0" />
+          </radialGradient>
+        </defs>
+        <rect width="1200" height="800" rx="48" fill="url(#bg)" />
+        <circle cx="820" cy="180" r="210" fill="#2563EB" opacity="0.09" />
+        <circle cx="310" cy="170" r="140" fill="#60A5FA" opacity="0.05" />
+        <rect x="0" y="548" width="1200" height="252" fill="#0B1220" opacity="0.92" />
+        <path d="M0 586H1200" stroke="#94A3B8" stroke-opacity="0.2" stroke-width="6" />
+        <path d="M112 632H1088" stroke="#F8FAFC" stroke-width="10" stroke-dasharray="76 48" opacity="0.82" />
+        <rect x="155" y="180" width="122" height="220" rx="20" fill="#E2E8F0" opacity="0.06" />
+        <rect x="305" y="140" width="86" height="250" rx="18" fill="#E2E8F0" opacity="0.05" />
+        <rect x="1028" y="168" width="90" height="190" rx="18" fill="#E2E8F0" opacity="0.06" />
+        <path d="M600 168C570 212 546 262 526 324" stroke="#D4E8FF" stroke-width="18" stroke-linecap="round" opacity="0.8" />
+        <path d="M600 168C570 212 546 262 526 324" stroke="#60A5FA" stroke-width="8" stroke-linecap="round" opacity="0.9" />
+        <circle cx="600" cy="162" r="34" fill="#F8FAFC" opacity="0.12" />
+        <circle cx="600" cy="162" r="18" fill="#F8FAFC" opacity="0.88" />
+        <circle cx="600" cy="162" r="64" fill="url(#glow)" opacity="0.4" />
+        <path d="M730 270L777 305L730 340" stroke="#93C5FD" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" opacity="0.95" />
+        <rect x="562" y="344" width="76" height="68" rx="20" fill="#2563EB" opacity="0.22" />
+        <path d="M320 470C380 430 451 410 531 408C604 406 672 424 737 460L790 492H250L320 470Z" fill="#020617" opacity="0.9" />
+        <path d="M354 438C380 454 401 472 416 496" stroke="#38BDF8" stroke-width="6" stroke-linecap="round" opacity="0.6" />
+        <path d="M436 424C474 450 498 474 514 500" stroke="#0EA5E9" stroke-width="5" stroke-linecap="round" opacity="0.6" />
+      </svg>
+    `),
+    Waste: svgDataUri(`
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" fill="none">
+        <defs>
+          <linearGradient id="bg" x1="120" y1="0" x2="1080" y2="800" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#F8FAFC" />
+            <stop offset="0.55" stop-color="#E2E8F0" />
+            <stop offset="1" stop-color="#CBD5E1" />
+          </linearGradient>
+          <linearGradient id="bin" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#0F172A" />
+            <stop offset="1" stop-color="#334155" />
+          </linearGradient>
+        </defs>
+        <rect width="1200" height="800" rx="48" fill="url(#bg)" />
+        <circle cx="980" cy="150" r="200" fill="#2563EB" opacity="0.07" />
+        <circle cx="220" cy="200" r="160" fill="#0EA5E9" opacity="0.05" />
+        <rect x="0" y="538" width="1200" height="262" fill="#E5E7EB" />
+        <path d="M120 592H1080" stroke="#94A3B8" stroke-width="9" stroke-dasharray="90 42" opacity="0.75" />
+        <path d="M362 472C396 432 445 410 508 410C574 410 622 434 658 476L716 538H310L362 472Z" fill="#0F172A" opacity="0.18" />
+        <rect x="466" y="250" width="250" height="228" rx="26" fill="url(#bin)" />
+        <path d="M442 252H740" stroke="#94A3B8" stroke-width="28" stroke-linecap="round" />
+        <rect x="500" y="308" width="168" height="132" rx="20" fill="#111827" />
+        <path d="M486 284C504 274 518 268 540 266H650C675 268 689 274 706 284" stroke="#CBD5E1" stroke-width="10" stroke-linecap="round" />
+        <path d="M550 222C538 200 530 184 522 168" stroke="#22C55E" stroke-width="8" stroke-linecap="round" />
+        <path d="M596 220C598 194 604 178 614 160" stroke="#22C55E" stroke-width="8" stroke-linecap="round" />
+        <path d="M646 224C658 202 670 184 686 170" stroke="#22C55E" stroke-width="8" stroke-linecap="round" />
+        <circle cx="528" cy="144" r="22" fill="#16A34A" opacity="0.85" />
+        <circle cx="588" cy="136" r="20" fill="#22C55E" opacity="0.8" />
+        <circle cx="648" cy="146" r="22" fill="#4ADE80" opacity="0.78" />
+        <path d="M590 368L632 420H548L590 368Z" fill="#F97316" opacity="0.9" />
+        <path d="M710 382L748 428H676L710 382Z" fill="#0EA5E9" opacity="0.9" />
+        <path d="M430 394L474 446H398L430 394Z" fill="#10B981" opacity="0.88" />
+        <circle cx="792" cy="330" r="58" fill="#22C55E" opacity="0.12" />
+        <path d="M786 306C768 314 762 330 762 344C762 364 778 380 798 380C820 380 836 364 836 342C836 330 828 316 812 308" stroke="#16A34A" stroke-width="8" stroke-linecap="round" />
+      </svg>
+    `),
+    Roads: svgDataUri(`
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" fill="none">
+        <defs>
+          <linearGradient id="bg" x1="100" y1="0" x2="1100" y2="800" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#0B1220" />
+            <stop offset="0.55" stop-color="#111827" />
+            <stop offset="1" stop-color="#334155" />
+          </linearGradient>
+        </defs>
+        <rect width="1200" height="800" rx="48" fill="url(#bg)" />
+        <circle cx="1020" cy="170" r="180" fill="#2563EB" opacity="0.08" />
+        <rect x="0" y="546" width="1200" height="254" fill="#0F172A" opacity="0.94" />
+        <path d="M120 608H1080" stroke="#F8FAFC" stroke-width="10" stroke-dasharray="82 50" opacity="0.8" />
+        <path d="M420 470L548 334C578 302 620 294 662 314L790 378L712 468L420 470Z" fill="#1E293B" />
+        <path d="M478 432L552 364C572 346 598 342 622 352L724 396L682 446L478 432Z" fill="#0F172A" opacity="0.95" />
+        <path d="M594 336L572 392L530 392L560 348L594 336Z" fill="#F59E0B" opacity="0.95" />
+        <circle cx="596" cy="398" r="42" fill="#E35D4F" opacity="0.18" />
+        <circle cx="596" cy="398" r="22" fill="#F97316" />
+        <path d="M944 318L992 394H896L944 318Z" fill="#F59E0B" />
+        <rect x="938" y="280" width="12" height="46" rx="6" fill="#F8FAFC" />
+        <path d="M206 406C254 372 312 360 372 366" stroke="#60A5FA" stroke-width="8" stroke-linecap="round" opacity="0.4" />
+      </svg>
+    `),
+    Drainage: svgDataUri(`
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 800" fill="none">
+        <defs>
+          <linearGradient id="bg" x1="120" y1="0" x2="1080" y2="800" gradientUnits="userSpaceOnUse">
+            <stop offset="0" stop-color="#08111E" />
+            <stop offset="0.6" stop-color="#0F172A" />
+            <stop offset="1" stop-color="#1E3A8A" />
+          </linearGradient>
+        </defs>
+        <rect width="1200" height="800" rx="48" fill="url(#bg)" />
+        <rect x="0" y="548" width="1200" height="252" fill="#0F172A" opacity="0.92" />
+        <path d="M120 610H1080" stroke="#94A3B8" stroke-width="9" stroke-dasharray="78 44" opacity="0.72" />
+        <circle cx="620" cy="410" r="120" fill="#38BDF8" opacity="0.12" />
+        <circle cx="620" cy="410" r="62" fill="#0EA5E9" opacity="0.2" />
+        <path d="M536 404C536 357 573 320 620 320C667 320 704 357 704 404C704 457 663 494 620 548C577 494 536 457 536 404Z" fill="#0EA5E9" opacity="0.92" />
+        <path d="M604 336L570 440H620L596 520L670 400H622L646 336H604Z" fill="#F8FAFC" opacity="0.92" />
+        <rect x="228" y="260" width="134" height="160" rx="20" fill="#1E293B" opacity="0.7" />
+        <rect x="842" y="250" width="140" height="170" rx="22" fill="#1E293B" opacity="0.7" />
+        <path d="M226 430C248 408 280 396 318 394C358 392 390 402 416 430" stroke="#38BDF8" stroke-width="8" stroke-linecap="round" opacity="0.7" />
+        <path d="M812 448C842 414 878 396 924 394C968 392 1002 404 1036 434" stroke="#38BDF8" stroke-width="8" stroke-linecap="round" opacity="0.7" />
+      </svg>
+    `),
+  };
+
+  return visuals[category];
+}
+
 // ─── DATA ────────────────────────────────────────────────────────────────────
 const ISSUES = [
   {
@@ -184,7 +353,7 @@ const ISSUES = [
     color: "#2563EB",
     icon: Droplets,
     borderClass: "issue-card-border-verified",
-    img: "https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=80&h=60&fit=crop&auto=format",
+    img: createIssueVisual("Water"),
   },
   {
     id: "KIN-2026-1788",
@@ -200,7 +369,7 @@ const ISSUES = [
     color: "#3B82F6",
     icon: Lightbulb,
     borderClass: "issue-card-border-active",
-    img: "https://images.unsplash.com/photo-1520034475321-cbe63696469a?w=80&h=60&fit=crop&auto=format",
+    img: createIssueVisual("Electricity"),
   },
   {
     id: "KIN-2026-1774",
@@ -216,7 +385,7 @@ const ISSUES = [
     color: "#8B5CF6",
     icon: Trash2,
     borderClass: "issue-card-border-progress",
-    img: "https://images.unsplash.com/photo-1604187350591-58975ab0fac8?w=80&h=60&fit=crop&auto=format",
+    img: createIssueVisual("Waste"),
   },
 ];
 
@@ -609,7 +778,7 @@ function IssueCard({ issue, delay = 0 }: { issue: typeof ISSUES[0]; delay?: numb
       style={{ animationDelay: `${delay}s` }}>
       <div className="flex gap-4 p-4">
         <div className="w-20 h-16 rounded-xl overflow-hidden shrink-0 bg-[#F1F5F9]">
-          <img src={issue.img} alt={issue.title} className="w-full h-full object-cover" />
+          <img src={issue.img} alt={issue.title} className="w-full h-full object-cover" loading="lazy" decoding="async" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -746,7 +915,7 @@ function LiveMapPage() {
                   <StatusPill status={issue.status} />
                   <button onClick={() => setSelected(null)} className="text-[#64748B] hover:text-[#0B0F19]"><X size={16} /></button>
                 </div>
-                <img src={issue.img} alt={issue.title} className="w-full h-36 object-cover rounded-xl mb-4 bg-[#F1F5F9]" />
+                <img src={issue.img} alt={issue.title} className="w-full h-36 object-cover rounded-xl mb-4 bg-[#F1F5F9]" loading="lazy" decoding="async" />
                 <h3 className="font-display font-bold text-[#0B0F19] mb-1">{issue.title}</h3>
                 <div className="flex items-center gap-2 text-xs text-[#64748B] mb-3">
                   <MapPin size={11} />{issue.location}
@@ -877,7 +1046,7 @@ function ReportIssuePage() {
             <h2 className="font-display font-bold text-xl text-[#0B0F19] mb-1">AI is analysing your report</h2>
             <p className="text-sm text-[#64748B] mb-5">Kintsugi AI is detecting the issue type and routing it to the right authority.</p>
             <div className="relative rounded-2xl overflow-hidden mb-5 bg-[#0B1220]" style={{ height: 200 }}>
-              <img src="https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=600&h=200&fit=crop&auto=format" alt="Issue" className="w-full h-full object-cover opacity-60" />
+              <img src={ISSUES[0].img} alt="Issue" className="w-full h-full object-cover opacity-60" loading="lazy" decoding="async" />
               {scanning && <div className="scan-anim" />}
               {scanned && (
                 <div className="absolute inset-3">
@@ -999,7 +1168,7 @@ function CommunityPage() {
         {ISSUES.map((issue) => (
           <div key={issue.id} className={`glass rounded-2xl p-5 card-shadow hover-lift ${issue.borderClass}`}>
             <div className="flex gap-3 mb-4">
-              <img src={issue.img} alt={issue.title} className="w-24 h-18 rounded-xl object-cover bg-[#F1F5F9]" />
+              <img src={issue.img} alt={issue.title} className="w-24 h-18 rounded-xl object-cover bg-[#F1F5F9]" loading="lazy" decoding="async" />
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <StatusPill status={issue.status} />
@@ -1543,6 +1712,27 @@ function ProfileDropdown({ onClose, setPage }: { onClose: () => void; setPage: (
   );
 }
 
+function buildCopilotFallback(message: string) {
+  const query = message.trim().toLowerCase();
+  const topIssue = ISSUES[0];
+  const secondIssue = ISSUES[1];
+  const thirdIssue = ISSUES[2];
+
+  if (query.includes("draft") || query.includes("message") || query.includes("escalat")) {
+    return `Try this: "Citizen reports a recurring ${topIssue.category.toLowerCase()} issue at ${topIssue.location}. It has ${topIssue.verifications} community verifications and needs attention from ${topIssue.authority}. Please confirm assignment and share ETA."`;
+  }
+
+  if (query.includes("report") || query.includes("what should") || query.includes("next")) {
+    return `Best next actions: focus on ${topIssue.title.toLowerCase()} first, then ${secondIssue.title.toLowerCase()}, and keep ${thirdIssue.title.toLowerCase()} on watch. ${topIssue.verifications} people have already verified the top item, so it is the strongest candidate for escalation.`;
+  }
+
+  if (query.includes("near me") || query.includes("summary") || query.includes("urgent")) {
+    return `The most urgent live issue is ${topIssue.title} at ${topIssue.location}. It is marked ${topIssue.status.toLowerCase()}, has ${topIssue.verifications} verifications, and is assigned to ${topIssue.authority}. A close second is ${secondIssue.title}.`;
+  }
+
+  return `The live board currently points to ${topIssue.title} at ${topIssue.location} as the strongest priority. It is ${topIssue.status.toLowerCase()} with ${topIssue.verifications} verifications. I can also help draft an escalation note, summarize nearby reports, or suggest the next best issue to submit.`;
+}
+
 // ─── AI ASSISTANT ─────────────────────────────────────────────────────────────
 function AIAssistant() {
   const [open, setOpen] = useState(false);
@@ -1550,15 +1740,38 @@ function AIAssistant() {
     { from: "ai", text: "Hi Srijan! I'm your civic copilot. How can I help you today?" }
   ]);
   const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [mode, setMode] = useState<"live" | "fallback" | "idle">("idle");
   const suggestions = ["Summarize urgent issues near me","What should I report next?","Predict which issue may escalate","Draft a municipal escalation message"];
 
-  const sendMessage = (text: string) => {
-    if (!text.trim()) return;
-    setMessages(m => [...m, { from: "user", text }]);
+  const sendMessage = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || sending) return;
+    setMessages(m => [...m, { from: "user", text: trimmed }]);
     setInput("");
-    setTimeout(() => {
-      setMessages(m => [...m, { from: "ai", text: "Analysing 18 nearby issues... The water leakage on 12th Main is highest priority with 18 community verifications and an overdue SLA. I recommend escalating to Water Supply Board immediately." }]);
-    }, 900);
+    setSending(true);
+    if (!firebaseConfigured && import.meta.env.DEV) {
+      setMode("fallback");
+      setMessages(m => [...m, { from: "ai", text: buildCopilotFallback(trimmed) }]);
+      setSending(false);
+      return;
+    }
+    try {
+      const response = firebaseConfigured ? await api.chat(trimmed) : await api.chatPublic(trimmed);
+      setMode("live");
+      setMessages(m => [...m, { from: "ai", text: response.answer }]);
+    } catch (firstError) {
+      try {
+        const response = await api.chatPublic(trimmed);
+        setMode("live");
+        setMessages(m => [...m, { from: "ai", text: response.answer }]);
+      } catch {
+        setMode("fallback");
+        setMessages(m => [...m, { from: "ai", text: buildCopilotFallback(trimmed) }]);
+      }
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -1572,7 +1785,9 @@ function AIAssistant() {
               </div>
               <div>
                 <div className="font-display font-bold text-sm text-white">Kintsugi AI</div>
-                <div className="text-[10px]" style={{ color: "rgba(239,246,255,0.5)" }}>Civic Copilot</div>
+                <div className="text-[10px]" style={{ color: "rgba(239,246,255,0.5)" }}>
+                  Civic Copilot {mode === "live" ? "· Gemini live" : mode === "fallback" ? "· Local fallback" : ""}
+                </div>
               </div>
             </div>
             <button onClick={() => setOpen(false)} className="text-[rgba(239,246,255,0.5)] hover:text-white"><X size={15} /></button>
@@ -1593,7 +1808,8 @@ function AIAssistant() {
             <div className="flex gap-1.5 flex-wrap">
               {suggestions.slice(0, 2).map(s => (
                 <button key={s} onClick={() => sendMessage(s)}
-                  className="text-[10px] px-2.5 py-1 rounded-full border border-[rgba(37,99,235,0.25)] text-[rgba(239,246,255,0.7)] hover:border-[#2563EB] hover:text-[#2563EB] transition-colors">
+                  className="text-[10px] px-2.5 py-1 rounded-full border border-[rgba(37,99,235,0.25)] text-[rgba(239,246,255,0.7)] hover:border-[#2563EB] hover:text-[#2563EB] transition-colors disabled:opacity-40"
+                  disabled={sending}>
                   {s}
                 </button>
               ))}
@@ -1604,10 +1820,11 @@ function AIAssistant() {
                 onChange={e => setInput(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && sendMessage(input)}
                 placeholder="Ask your civic copilot…"
-                className="flex-1 bg-transparent px-3 py-2.5 text-xs text-white placeholder:text-[rgba(239,246,255,0.35)]"
+                className="flex-1 bg-transparent px-3 py-2.5 text-xs text-white placeholder:text-[rgba(239,246,255,0.35)] disabled:opacity-60"
+                disabled={sending}
               />
-              <button onClick={() => sendMessage(input)} className="px-3 py-2.5 hover:opacity-80 transition-opacity" style={{ color: "#2563EB" }}>
-                <Send size={14} />
+              <button onClick={() => sendMessage(input)} className="px-3 py-2.5 hover:opacity-80 transition-opacity disabled:opacity-40" style={{ color: "#2563EB" }} disabled={sending}>
+                {sending ? <RefreshCw size={14} className="spin" /> : <Send size={14} />}
               </button>
             </div>
           </div>

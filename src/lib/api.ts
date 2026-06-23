@@ -13,6 +13,28 @@ async function request<T>(path:string, init:RequestInit={}):Promise<T>{
   return body as T;
 }
 
+async function requestPublic<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
+  let response: Response;
+  try {
+    response = await fetch(`${base}${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        ...(!(init.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
+        ...init.headers
+      }
+    });
+  } catch (error) {
+    throw new Error(error instanceof DOMException && error.name === 'AbortError' ? 'Service timed out.' : 'Cannot reach Kintsugi services.');
+  } finally {
+    clearTimeout(timer);
+  }
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error ?? `Request failed (${response.status})`);
+  return body as T;
+}
+
 export const api={
   health:async()=>{const response=await fetch(`${base}/api/health`);if(!response.ok)throw new Error('API unavailable');return response.json() as Promise<{ok:boolean}>},
   issues:(wardId:string)=>request<{items:any[]}>(`/api/issues?wardId=${encodeURIComponent(wardId)}`),
@@ -20,6 +42,7 @@ export const api={
   verifyIssue:(id:string,evidence?:string)=>request<{supporterCount:number;status?:string}>(`/api/issues/${id}/verify`,{method:'POST',body:JSON.stringify({evidence})}),
   updateStatus:(id:string,status:string,note:string)=>request<{ok:true}>(`/api/issues/${id}/status`,{method:'PATCH',body:JSON.stringify({status,note})}),
   chat:(message:string)=>request<{answer:string}>('/api/ai/chat',{method:'POST',body:JSON.stringify({message})}),
+  chatPublic:(message:string)=>requestPublic<{answer:string}>('/api/ai/chat-public',{method:'POST',body:JSON.stringify({message})}),
   profile:()=>request<{profile:any}>('/api/me'),
   updateProfile:(input:Record<string,unknown>)=>request<{profile:any}>('/api/me',{method:'PATCH',body:JSON.stringify(input)}),
   notifications:()=>request<{items:any[]}>('/api/notifications'),

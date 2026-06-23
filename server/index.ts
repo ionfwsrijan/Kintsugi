@@ -59,6 +59,7 @@ app.patch('/api/issues/:id/status',requireAuth,requireRole('authority','admin'),
   res.json({ok:true});
 }));
 app.post('/api/ai/chat',requireAuth,asyncRoute(async(req,res)=>{const input=chatSchema.parse(req.body);const snap=await db.collection('issues').where('status','in',['Reported','Verified','Assigned','In progress']).limit(30).get();res.json({answer:await civicAnswer(input.message,snap.docs.map(d=>({id:d.id,...d.data()} as IssueRecord)))});}));
+app.post('/api/ai/chat-public',asyncRoute(async(req,res)=>{const input=chatSchema.parse(req.body);const snap=await db.collection('issues').where('status','in',['Reported','Verified','Assigned','In progress']).limit(30).get();res.json({answer:await civicAnswer(input.message,snap.docs.map(d=>({id:d.id,...d.data()} as IssueRecord)))});}));
 app.post('/internal/agents/sla',asyncRoute(async(req,res)=>{if(req.headers['x-agent-secret']!==env.INTERNAL_AGENT_SECRET)return res.status(401).json({error:'Unauthorized'});const snap=await db.collection('issues').where('status','in',['Reported','Verified','Assigned','In progress']).where('slaDueAt','<=',Timestamp.now()).limit(200).get();const batch=db.batch();snap.docs.forEach(doc=>{batch.update(doc.ref,{escalated:true,updatedAt:Timestamp.now()});batch.create(doc.ref.collection('events').doc(),{type:'SLA_ESCALATED',actorId:'system:sla-agent',at:Timestamp.now(),detail:{}})});await batch.commit();res.json({escalated:snap.size});}));
 if(env.NODE_ENV==='production'){
   const dist=path.resolve(process.cwd(),'dist');
