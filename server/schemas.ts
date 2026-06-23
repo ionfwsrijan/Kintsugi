@@ -16,7 +16,22 @@ export const issueInputSchema = z.object({
 
 export const verifySchema = z.object({ evidence: z.string().trim().max(500).optional() });
 export const statusSchema = z.object({ status: z.enum(statuses), note: z.string().trim().min(3).max(500) });
-export const chatSchema = z.object({ message: z.string().trim().min(2).max(800), latitude: z.number().optional(), longitude: z.number().optional() });
+export const chatContextSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  category: z.string(),
+  status: z.string(),
+  urgency: z.string().optional(),
+  address: z.string().optional(),
+  slaDueAt: z.string().optional()
+});
+
+export const chatSchema = z.object({
+  message: z.string().trim().min(2).max(800),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  context: z.array(chatContextSchema).optional()
+});
 
 export const profileSchema = z.object({
   displayName: z.string().trim().min(2).max(60).optional(),

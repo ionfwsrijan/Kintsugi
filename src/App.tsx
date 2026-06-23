@@ -389,6 +389,16 @@ const ISSUES = [
   },
 ];
 
+const COPILOT_CONTEXT = ISSUES.map(({ id, title, category, status, severity, location, time }) => ({
+  id,
+  title,
+  category,
+  status,
+  urgency: severity,
+  address: location,
+  slaDueAt: time,
+}));
+
 const NOTIFICATIONS = [
   { id: 1, text: "Your water leakage report was verified by 12 neighbours.", icon: ThumbsUp, color: "#0EA5E9", time: "10m ago", unread: true },
   { id: 2, text: "BBMP has marked your garbage report as In Progress.", icon: RefreshCw, color: "#8B5CF6", time: "1h ago", unread: true },
@@ -2078,6 +2088,14 @@ function buildCopilotFallback(message: string) {
   const secondIssue = ISSUES[1];
   const thirdIssue = ISSUES[2];
 
+  if (query.includes("time")) {
+    return `It is currently ${new Intl.DateTimeFormat("en-IN", { hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true, timeZone: "Asia/Kolkata" }).format(new Date())} in India.`;
+  }
+
+  if (query.includes("connected")) {
+    return "I’m in fallback mode right now, which means the live Gemini route is not reachable yet. Once the backend is connected, this badge should switch to Gemini live.";
+  }
+
   if (query.includes("draft") || query.includes("message") || query.includes("escalat")) {
     return `Try this: "Citizen reports a recurring ${topIssue.category.toLowerCase()} issue at ${topIssue.location}. It has ${topIssue.verifications} community verifications and needs attention from ${topIssue.authority}. Please confirm assignment and share ETA."`;
   }
@@ -2111,12 +2129,12 @@ function AIAssistant() {
     setInput("");
     setSending(true);
     try {
-      const response = firebaseConfigured ? await api.chat(trimmed) : await api.chatPublic(trimmed);
+      const response = firebaseConfigured ? await api.chat(trimmed, COPILOT_CONTEXT) : await api.chatPublic(trimmed, COPILOT_CONTEXT);
       setMode("live");
       setMessages(m => [...m, { from: "ai", text: response.answer }]);
     } catch (firstError) {
       try {
-        const response = await api.chatPublic(trimmed);
+        const response = await api.chatPublic(trimmed, COPILOT_CONTEXT);
         setMode("live");
         setMessages(m => [...m, { from: "ai", text: response.answer }]);
       } catch {

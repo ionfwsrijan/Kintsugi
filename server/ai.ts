@@ -10,6 +10,16 @@ export type Triage = {
   privacyRisks: string[];
 };
 
+export type CivicChatContext = {
+  id: string;
+  title: string;
+  category: string;
+  status: string;
+  urgency?: string;
+  address?: string;
+  slaDueAt?: string;
+};
+
 const triageSchema = {
   type: Type.OBJECT,
   required: ['title','category','urgency','confidence','hazards','summary','responsibleDepartment','slaHours','privacyRisks'],
@@ -41,8 +51,8 @@ export async function triageIssue(input: { mimeType: string; bytes: Buffer; desc
   return value;
 }
 
-export async function civicAnswer(message: string, issues: IssueRecord[]) {
-  const safeContext = issues.slice(0, 30).map(({ id,title,category,status,urgency,address,slaDueAt }) => ({ id,title,category,status,urgency,address,slaDueAt }));
+export async function civicAnswer(message: string, issues: CivicChatContext[]) {
+  const safeContext = issues.slice(0, 30);
   const response = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: `You are Kintsugi, a concise civic copilot. Use only the provided verified issue context. Never invent authority actions. If the context is insufficient, say so. Context: ${JSON.stringify(safeContext)}\nCitizen: ${message}`,

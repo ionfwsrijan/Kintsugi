@@ -13,6 +13,33 @@ import { createIssue, verifyIssue } from './issues.js';
 import { civicAnswer } from './ai.js';
 import type { IssueRecord } from './types.js';
 import { ensureUser, rewardCatalog } from './users.js';
+import type { CivicChatContext } from './ai.js';
+
+const fallbackChatContext: CivicChatContext[] = [
+  { id: 'KIN-2026-1801', title: 'Water leakage near 12th Main', category: 'Water', status: 'Verified', urgency: 'High', address: '12th Main Road, Indiranagar', slaDueAt: '1d left' },
+  { id: 'KIN-2026-1788', title: 'Streetlight not working on CMH Road', category: 'Lighting', status: 'Assigned', urgency: 'Medium', address: 'CMH Road, Indiranagar', slaDueAt: '3d left' },
+  { id: 'KIN-2026-1774', title: 'Garbage overflow beside Defence Colony Park', category: 'Waste', status: 'In progress', urgency: 'Medium', address: 'Defence Colony Park, Indiranagar', slaDueAt: '2d left' }
+];
+
+async function resolveChatContext(context?: CivicChatContext[]) {
+  if (context?.length) return context;
+  try {
+    const snap = await db.collection('issues').where('status','in',['Reported','Verified','Assigned','In progress']).limit(30).get();
+    const rows = snap.docs.map(d => ({ id: d.id, ...d.data() } as IssueRecord));
+    return rows.map(({ id, title, category, status, urgency, address, slaDueAt }) => ({
+      id,
+      title,
+      category,
+      status,
+      urgency,
+      address,
+      slaDueAt
+    }));
+  } catch (error) {
+    console.warn('Falling back to local civic chat context:', error);
+    return fallbackChatContext;
+  }
+}
 
 const app=express();
 app.set('trust proxy',1); app.use(helmet()); app.use(cors({origin:allowedOrigins,credentials:true})); app.use(express.json({limit:'256kb'}));
@@ -59,8 +86,8 @@ app.patch('/api/issues/:id/status',requireAuth,requireRole('authority','admin'),
   await db.runTransaction(async tx=>{const issue=await tx.get(ref);if(!issue.exists)throw Object.assign(new Error('Issue not found'),{status:404});if(user.role!=='admin'&&!user.wardIds.includes(issue.data()?.wardId))throw Object.assign(new Error('Outside assigned ward'),{status:403});tx.update(ref,{status:input.status,updatedAt:Timestamp.now()});tx.create(ref.collection('events').doc(),{type:'STATUS_CHANGED',actorId:user.uid,at:Timestamp.now(),detail:input});});
   res.json({ok:true});
 }));
-app.post('/api/ai/chat',requireAuth,asyncRoute(async(req,res)=>{const input=chatSchema.parse(req.body);const snap=await db.collection('issues').where('status','in',['Reported','Verified','Assigned','In progress']).limit(30).get();res.json({answer:await civicAnswer(input.message,snap.docs.map(d=>({id:d.id,...d.data()} as IssueRecord)))});}));
-app.post('/api/ai/chat-public',asyncRoute(async(req,res)=>{const input=chatSchema.parse(req.body);const snap=await db.collection('issues').where('status','in',['Reported','Verified','Assigned','In progress']).limit(30).get();res.json({answer:await civicAnswer(input.message,snap.docs.map(d=>({id:d.id,...d.data()} as IssueRecord)))});}));
+app.post('/api/ai/chat',requireAuth,asyncRoute(async(req,res)=>{const input=chatSchema.parse(req.body);res.json({answer:await civicAnswer(input.message,await resolveChatContext(input.context))});}));
+app.post('/api/ai/chat-public',asyncRoute(async(req,res)=>{const input=chatSchema.parse(req.body);res.json({answer:await civicAnswer(input.message,await resolveChatContext(input.context))});}));
 app.post('/internal/agents/sla',asyncRoute(async(req,res)=>{if(req.headers['x-agent-secret']!==env.INTERNAL_AGENT_SECRET)return res.status(401).json({error:'Unauthorized'});const snap=await db.collection('issues').where('status','in',['Reported','Verified','Assigned','In progress']).where('slaDueAt','<=',Timestamp.now()).limit(200).get();const batch=db.batch();snap.docs.forEach(doc=>{batch.update(doc.ref,{escalated:true,updatedAt:Timestamp.now()});batch.create(doc.ref.collection('events').doc(),{type:'SLA_ESCALATED',actorId:'system:sla-agent',at:Timestamp.now(),detail:{}})});await batch.commit();res.json({escalated:snap.size});}));
 if(env.NODE_ENV==='production'){
   const dist=path.resolve(process.cwd(),'dist');

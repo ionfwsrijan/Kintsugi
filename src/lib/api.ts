@@ -1,6 +1,7 @@
 import { ensureSession } from './firebase';
 
 const base = import.meta.env.VITE_API_BASE_URL ?? '';
+const publicChatBase = import.meta.env.VITE_PUBLIC_API_BASE_URL ?? 'https://kintsugi-473996237757.asia-south1.run.app';
 
 async function request<T>(path:string, init:RequestInit={}):Promise<T>{
   const user=await ensureSession(), token=await user.getIdToken(),controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
@@ -17,7 +18,7 @@ async function requestPublic<T>(path: string, init: RequestInit = {}): Promise<T
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), 15000);
   let response: Response;
   try {
-    response = await fetch(`${base}${path}`, {
+    response = await fetch(`${publicChatBase}${path}`, {
       ...init,
       signal: controller.signal,
       headers: {
@@ -41,8 +42,8 @@ export const api={
   createIssue:(form:FormData)=>request<{issue:any;merged:boolean}>('/api/issues',{method:'POST',body:form}),
   verifyIssue:(id:string,evidence?:string)=>request<{supporterCount:number;status?:string}>(`/api/issues/${id}/verify`,{method:'POST',body:JSON.stringify({evidence})}),
   updateStatus:(id:string,status:string,note:string)=>request<{ok:true}>(`/api/issues/${id}/status`,{method:'PATCH',body:JSON.stringify({status,note})}),
-  chat:(message:string)=>request<{answer:string}>('/api/ai/chat',{method:'POST',body:JSON.stringify({message})}),
-  chatPublic:(message:string)=>requestPublic<{answer:string}>('/api/ai/chat-public',{method:'POST',body:JSON.stringify({message})}),
+  chat:(message:string,context?:unknown[])=>request<{answer:string}>('/api/ai/chat',{method:'POST',body:JSON.stringify({message,context})}),
+  chatPublic:(message:string,context?:unknown[])=>requestPublic<{answer:string}>('/api/ai/chat-public',{method:'POST',body:JSON.stringify({message,context})}),
   profile:()=>request<{profile:any}>('/api/me'),
   updateProfile:(input:Record<string,unknown>)=>request<{profile:any}>('/api/me',{method:'PATCH',body:JSON.stringify(input)}),
   notifications:()=>request<{items:any[]}>('/api/notifications'),
