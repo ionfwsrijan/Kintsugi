@@ -2110,12 +2110,6 @@ function AIAssistant() {
     setMessages(m => [...m, { from: "user", text: trimmed }]);
     setInput("");
     setSending(true);
-    if (!firebaseConfigured && import.meta.env.DEV) {
-      setMode("fallback");
-      setMessages(m => [...m, { from: "ai", text: buildCopilotFallback(trimmed) }]);
-      setSending(false);
-      return;
-    }
     try {
       const response = firebaseConfigured ? await api.chat(trimmed) : await api.chatPublic(trimmed);
       setMode("live");
