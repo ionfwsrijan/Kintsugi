@@ -8,6 +8,7 @@ const schema = z.object({
   GOOGLE_CLOUD_PROJECT: z.string().min(2),
   FIREBASE_STORAGE_BUCKET: z.string().min(3),
   INTERNAL_AGENT_SECRET: z.string().min(24),
+  GOOGLE_MAPS_API_KEY: z.string().optional().default(''),
   ALLOWED_ORIGINS: z.string().default('http://localhost:5173,http://127.0.0.1:5173')
 });
 

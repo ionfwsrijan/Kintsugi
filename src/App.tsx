@@ -296,6 +296,18 @@ const defaultLiveLocation: LiveLocation = {
 };
 
 const indiranagarAnchor = { lat: 12.9784, lng: 77.6408 };
+const issueCoordinates: Record<string, { lat: number; lng: number }> = {
+  "KIN-2026-1801": { lat: 12.9792, lng: 77.6417 },
+  "KIN-2026-1788": { lat: 12.9787, lng: 77.6445 },
+  "KIN-2026-1774": { lat: 12.9759, lng: 77.6434 },
+};
+
+declare global {
+  interface Window {
+    google?: any;
+    __kintsugiGoogleMapsPromise?: Promise<void>;
+  }
+}
 
 function projectLocationToMap(location?: LiveLocation) {
   if (!location || location.status !== "ready" || location.lat === undefined || location.lng === undefined) {
@@ -344,6 +356,57 @@ function useBrowserLocation() {
   };
 
   return { location, requestLocation };
+}
+
+function useGoogleMapsApiKey() {
+  const [apiKey, setApiKey] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    const fallback = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "";
+
+    fetch("/api/config")
+      .then(res => res.ok ? res.json() : Promise.reject(new Error("Config unavailable")))
+      .then(data => {
+        if (alive) setApiKey(data.googleMapsApiKey || fallback);
+      })
+      .catch(() => {
+        if (alive) setApiKey(fallback);
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+
+    return () => { alive = false; };
+  }, []);
+
+  return { apiKey, loading };
+}
+
+function loadGoogleMaps(apiKey: string) {
+  if (window.google?.maps) return Promise.resolve();
+  if (window.__kintsugiGoogleMapsPromise) return window.__kintsugiGoogleMapsPromise;
+
+  window.__kintsugiGoogleMapsPromise = new Promise((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>('script[data-kintsugi-google-maps="true"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve());
+      existing.addEventListener("error", reject);
+      return;
+    }
+
+    const script = document.createElement("script");
+    script.dataset.kintsugiGoogleMaps = "true";
+    script.async = true;
+    script.defer = true;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&v=weekly`;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Google Maps failed to load"));
+    document.head.appendChild(script);
+  });
+
+  return window.__kintsugiGoogleMapsPromise;
 }
 
 // ─── SMALL COMPONENTS ────────────────────────────────────────────────────────
@@ -737,6 +800,7 @@ function LiveMapPage({ liveLocation, requestLocation }: { liveLocation: LiveLoca
   const [query, setQuery] = useState("");
   const [insightsOpen, setInsightsOpen] = useState(true);
   const [heatmapOpen, setHeatmapOpen] = useState(false);
+  const { apiKey: googleMapsApiKey, loading: configLoading } = useGoogleMapsApiKey();
   const filterTypes = ["All", "Water", "Electricity", "Waste", "Roads", "Drainage"];
   const visibleIssues = ISSUES.filter(issue => {
     const matchesFilter = activeFilter === "All" || issue.category === activeFilter;
@@ -821,33 +885,23 @@ function LiveMapPage({ liveLocation, requestLocation }: { liveLocation: LiveLoca
             {visibleIssues.length} visible issues
           </div>
         </div>
-        <MapCanvas liveLocation={liveLocation} />
-        {heatmapOpen && (
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_28%_38%,rgba(239,68,68,0.25),transparent_18%),radial-gradient(circle_at_62%_34%,rgba(37,99,235,0.22),transparent_20%),radial-gradient(circle_at_67%_68%,rgba(14,165,233,0.22),transparent_18%)]" />
-        )}
-        {insightsOpen && (
-          <div className="absolute left-4 bottom-4 glass rounded-2xl card-shadow p-4 max-w-sm">
-            <div className="flex items-center gap-2 mb-2">
-              <Sparkles size={15} className="text-[#2563EB]" />
-              <h3 className="font-display font-bold text-sm text-[#0B0F19]">AI map insight</h3>
+        {configLoading ? (
+          <div className="h-full w-full grid place-items-center bg-[#E5E7EB]">
+            <div className="glass rounded-2xl px-5 py-4 text-sm font-semibold text-[#0B1220] card-shadow flex items-center gap-2">
+              <RefreshCw size={16} className="animate-spin text-[#2563EB]" /> Loading map configuration…
             </div>
-            <p className="text-xs text-[#64748B] leading-relaxed">
-              Water and waste reports are clustered near 12th Main and Defence Colony Park. Community verification is strongest for water issues.
-            </p>
           </div>
-        )}
-        {/* Clickable overlay pins */}
-        {[
-          { id: "KIN-2026-1801", x: "27%", y: "38%" },
-          { id: "KIN-2026-1788", x: "58%", y: "31%" },
-          { id: "KIN-2026-1774", x: "67%", y: "68%" },
-        ].filter(pin => visibleIssues.some(issue => issue.id === pin.id)).map(pin => (
-          <button key={pin.id}
-            onClick={() => setSelected(selected === pin.id ? null : pin.id)}
-            className="absolute w-8 h-8 rounded-full cursor-pointer border-2 border-white"
-            style={{ left: pin.x, top: pin.y, transform: "translate(-50%,-50%)", background: "transparent" }}
+        ) : (
+          <RealGoogleMap
+            apiKey={googleMapsApiKey}
+            visibleIssues={visibleIssues}
+            selected={selected}
+            setSelected={setSelected}
+            liveLocation={liveLocation}
+            heatmapOpen={heatmapOpen}
+            insightsOpen={insightsOpen}
           />
-        ))}
+        )}
       </div>
 
       {/* Issue details drawer */}
@@ -908,6 +962,190 @@ function LocateIcon({ status }: { status: LiveLocation["status"] }) {
   if (status === "ready") return <Navigation size={15} className="text-[#2563EB]" />;
   if (status === "denied" || status === "error") return <AlertCircle size={15} className="text-[#E35D4F]" />;
   return <MapPin size={15} className="text-[#2563EB]" />;
+}
+
+function RealGoogleMap({
+  apiKey,
+  visibleIssues,
+  selected,
+  setSelected,
+  liveLocation,
+  heatmapOpen,
+  insightsOpen,
+}: {
+  apiKey: string;
+  visibleIssues: typeof ISSUES;
+  selected: string | null;
+  setSelected: (id: string | null) => void;
+  liveLocation: LiveLocation;
+  heatmapOpen: boolean;
+  insightsOpen: boolean;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<any>(null);
+  const markersRef = useRef<any[]>([]);
+  const userMarkerRef = useRef<any>(null);
+  const [loadState, setLoadState] = useState<"loading" | "ready" | "error">("loading");
+
+  useEffect(() => {
+    if (!apiKey) return;
+    let cancelled = false;
+
+    loadGoogleMaps(apiKey)
+      .then(() => {
+        if (cancelled || !containerRef.current) return;
+
+        const center = liveLocation.status === "ready" && liveLocation.lat && liveLocation.lng
+          ? { lat: liveLocation.lat, lng: liveLocation.lng }
+          : indiranagarAnchor;
+
+        mapRef.current = new window.google.maps.Map(containerRef.current, {
+          center,
+          zoom: 15,
+          mapTypeControl: false,
+          streetViewControl: false,
+          fullscreenControl: true,
+          clickableIcons: true,
+          styles: [
+            { featureType: "poi.business", stylers: [{ visibility: "off" }] },
+            { featureType: "transit", elementType: "labels.icon", stylers: [{ visibility: "off" }] },
+          ],
+        });
+
+        setLoadState("ready");
+      })
+      .catch(() => {
+        if (!cancelled) setLoadState("error");
+      });
+
+    return () => { cancelled = true; };
+  }, [apiKey]);
+
+  useEffect(() => {
+    if (!mapRef.current || !window.google?.maps) return;
+
+    markersRef.current.forEach(marker => marker.setMap(null));
+    markersRef.current = visibleIssues.map(issue => {
+      const position = issueCoordinates[issue.id] ?? indiranagarAnchor;
+      const marker = new window.google.maps.Marker({
+        position,
+        map: mapRef.current,
+        title: issue.title,
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: selected === issue.id ? 12 : 9,
+          fillColor: issue.severity === "Critical" ? "#E35D4F" : issue.color,
+          fillOpacity: 1,
+          strokeColor: "#FFFFFF",
+          strokeWeight: 3,
+        },
+      });
+
+      const info = new window.google.maps.InfoWindow({
+        content: `<div style="font-family:Arial,sans-serif;max-width:220px"><strong>${issue.title}</strong><br/><span>${issue.location}</span><br/><small>${issue.status} • ${issue.verifications} verified</small></div>`,
+      });
+
+      marker.addListener("click", () => {
+        setSelected(issue.id);
+        info.open({ map: mapRef.current, anchor: marker });
+      });
+
+      return marker;
+    });
+  }, [visibleIssues, selected, setSelected]);
+
+  useEffect(() => {
+    if (!mapRef.current || !window.google?.maps || liveLocation.status !== "ready" || liveLocation.lat === undefined || liveLocation.lng === undefined) return;
+
+    const position = { lat: liveLocation.lat, lng: liveLocation.lng };
+    mapRef.current.panTo(position);
+    mapRef.current.setZoom(Math.max(mapRef.current.getZoom() ?? 15, 15));
+
+    if (!userMarkerRef.current) {
+      userMarkerRef.current = new window.google.maps.Marker({
+        position,
+        map: mapRef.current,
+        title: "Your live location",
+        zIndex: 999,
+        icon: {
+          path: window.google.maps.SymbolPath.CIRCLE,
+          scale: 8,
+          fillColor: "#2563EB",
+          fillOpacity: 1,
+          strokeColor: "#FFFFFF",
+          strokeWeight: 4,
+        },
+      });
+    } else {
+      userMarkerRef.current.setPosition(position);
+      userMarkerRef.current.setMap(mapRef.current);
+    }
+
+    const accuracyCircle = new window.google.maps.Circle({
+      map: mapRef.current,
+      center: position,
+      radius: liveLocation.accuracy || 50,
+      strokeColor: "#2563EB",
+      strokeOpacity: 0.35,
+      strokeWeight: 1,
+      fillColor: "#2563EB",
+      fillOpacity: 0.12,
+    });
+
+    return () => accuracyCircle.setMap(null);
+  }, [liveLocation]);
+
+  if (!apiKey) {
+    return (
+      <div className="h-full w-full grid place-items-center bg-[#E5E7EB]">
+        <div className="glass rounded-2xl p-6 max-w-lg text-center card-shadow">
+          <MapPin size={34} className="mx-auto mb-3 text-[#2563EB]" />
+          <h2 className="font-display font-bold text-xl text-[#0B0F19] mb-2">Google Maps key required</h2>
+          <p className="text-sm text-[#64748B] leading-relaxed">
+            Add a browser-restricted Google Maps JavaScript API key to Cloud Run as <strong>GOOGLE_MAPS_API_KEY</strong>, then redeploy.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-full w-full">
+      <div ref={containerRef} className="h-full w-full" />
+      {loadState === "loading" && (
+        <div className="absolute inset-0 grid place-items-center bg-[#E5E7EB]">
+          <div className="glass rounded-2xl px-5 py-4 text-sm font-semibold text-[#0B1220] card-shadow flex items-center gap-2">
+            <RefreshCw size={16} className="animate-spin text-[#2563EB]" /> Loading Google Maps…
+          </div>
+        </div>
+      )}
+      {loadState === "error" && (
+        <div className="absolute inset-0 grid place-items-center bg-[#E5E7EB]">
+          <div className="glass rounded-2xl p-6 max-w-lg text-center card-shadow">
+            <AlertCircle size={34} className="mx-auto mb-3 text-[#E35D4F]" />
+            <h2 className="font-display font-bold text-xl text-[#0B0F19] mb-2">Google Maps could not load</h2>
+            <p className="text-sm text-[#64748B] leading-relaxed">
+              Check that Maps JavaScript API is enabled, billing is active, and your API key allows this Cloud Run domain.
+            </p>
+          </div>
+        </div>
+      )}
+      {heatmapOpen && (
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_28%_38%,rgba(239,68,68,0.25),transparent_18%),radial-gradient(circle_at_62%_34%,rgba(37,99,235,0.22),transparent_20%),radial-gradient(circle_at_67%_68%,rgba(14,165,233,0.22),transparent_18%)]" />
+      )}
+      {insightsOpen && (
+        <div className="absolute left-4 bottom-4 glass rounded-2xl card-shadow p-4 max-w-sm">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles size={15} className="text-[#2563EB]" />
+            <h3 className="font-display font-bold text-sm text-[#0B0F19]">AI map insight</h3>
+          </div>
+          <p className="text-xs text-[#64748B] leading-relaxed">
+            Water and waste reports are clustered near 12th Main and Defence Colony Park. Community verification is strongest for water issues.
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── PAGE: REPORT ISSUE ──────────────────────────────────────────────────────

@@ -20,6 +20,7 @@ app.use('/api',rateLimit({windowMs:60_000,limit:100,standardHeaders:'draft-8',le
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:15*1024*1024,files:1},fileFilter:(_r,f,cb)=>cb(null,/^(image|video)\//.test(f.mimetype))});
 
 app.get('/api/health',(_req,res)=>res.json({ok:true,service:'kintsugi-api'}));
+app.get('/api/config',(_req,res)=>res.json({googleMapsApiKey:env.GOOGLE_MAPS_API_KEY}));
 app.get('/api/me',requireAuth,asyncRoute(async(req,res)=>res.json({profile:await ensureUser((req as AuthedRequest).user.uid)})));
 app.patch('/api/me',requireAuth,asyncRoute(async(req,res)=>{
   const uid=(req as AuthedRequest).user.uid,input=profileSchema.parse(req.body),ref=db.collection('users').doc(uid);
