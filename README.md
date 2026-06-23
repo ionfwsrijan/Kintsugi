@@ -10,6 +10,10 @@ Local civic issues are usually reported through fragmented channels with poor vi
 
 `Citizen report → AI triage → community verification → department routing → status tracking → impact measurement`
 
+## Screenshot
+
+<img width="1896" height="897" alt="Screenshot 2026-06-23 162211" src="https://github.com/user-attachments/assets/11018720-54f1-4636-a4f5-208b3dd05ef3" />
+
 ## Key features
 
 - Photo/video-first issue reporting flow
@@ -88,10 +92,10 @@ Gemini keys should remain server-side only. Do not expose them through `VITE_` v
 
 ## Hackathon submission checklist
 
-- [ ] Deploy the app using Google AI Studio Publish
-- [ ] Submit the public deployed app URL
-- [ ] Push this repository to GitHub
-- [ ] Create a public Google Doc with:
+- [x] Deploy the app using Google AI Studio Publish
+- [x] Submit the public deployed app URL
+- [x] Push this repository to GitHub
+- [x] Create a public Google Doc with:
   - Problem statement selected
   - Solution overview
   - Key features
@@ -100,8 +104,8 @@ Gemini keys should remain server-side only. Do not expose them through `VITE_` v
   - Screenshots
   - Deployed app link
   - GitHub repo link
-- [ ] Test the deployed link in an incognito window
-- [ ] Make sure the Google Doc is accessible to anyone with the link
+- [x] Test the deployed link in an incognito window
+- [x] Make sure the Google Doc is accessible to anyone with the link
 
 ## Demo narrative for judges
 

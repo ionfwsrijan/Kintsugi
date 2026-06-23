@@ -20,6 +20,7 @@ app.use('/api',rateLimit({windowMs:60_000,limit:100,standardHeaders:'draft-8',le
 const upload=multer({storage:multer.memoryStorage(),limits:{fileSize:15*1024*1024,files:1},fileFilter:(_r,f,cb)=>cb(null,/^(image|video)\//.test(f.mimetype))});
 
 app.get('/api/health',(_req,res)=>res.json({ok:true,service:'kintsugi-api'}));
+app.get('/api/config',(_req,res)=>res.json({googleMapsApiKey:env.GOOGLE_MAPS_API_KEY}));
 app.get('/api/me',requireAuth,asyncRoute(async(req,res)=>res.json({profile:await ensureUser((req as AuthedRequest).user.uid)})));
 app.patch('/api/me',requireAuth,asyncRoute(async(req,res)=>{
   const uid=(req as AuthedRequest).user.uid,input=profileSchema.parse(req.body),ref=db.collection('users').doc(uid);
@@ -64,7 +65,7 @@ app.post('/internal/agents/sla',asyncRoute(async(req,res)=>{if(req.headers['x-ag
 if(env.NODE_ENV==='production'){
   const dist=path.resolve(process.cwd(),'dist');
   app.use(express.static(dist,{maxAge:'1y',immutable:true,index:false}));
-  app.get('*',(_req,res)=>res.sendFile(path.join(dist,'index.html')));
+  app.get('/{*splat}',(_req,res)=>res.sendFile(path.join(dist,'index.html')));
 }
 app.use((err:any,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{console.error(err);res.status(err.status??(err.name==='ZodError'?400:500)).json({error:err.status?err.message:'Request failed',details:err.name==='ZodError'?err.issues:undefined});});
 app.listen(env.PORT,()=>console.log(`Kintsugi API listening on ${env.PORT}`));
