@@ -1,0 +1,10 @@
+steps:
+  - name: node:24
+    entrypoint: corepack
+    args: ['pnpm', 'install', '--frozen-lockfile']
+  - name: node:24
+    entrypoint: corepack
+    args: ['pnpm', 'run', 'build']
+  - name: gcr.io/cloud-builders/docker
+    args: ['build', '-t', '${_IMAGE}', '.']
+images: ['${_IMAGE}']
