@@ -281,6 +281,71 @@ const ADMIN_ISSUES = [
   { id: "KIN-2026-1751", category: "Drainage", severity: "High", location: "Jeevan Bhima Nagar", status: "Assigned", verifications: 9, dept: "BWSSB", sla: "4d left", updated: "3d ago" },
 ];
 
+type LiveLocation = {
+  status: "idle" | "loading" | "ready" | "denied" | "unsupported" | "error";
+  lat?: number;
+  lng?: number;
+  accuracy?: number;
+  updatedAt?: string;
+  message: string;
+};
+
+const defaultLiveLocation: LiveLocation = {
+  status: "idle",
+  message: "Click Locate to use your live browser location",
+};
+
+const indiranagarAnchor = { lat: 12.9784, lng: 77.6408 };
+
+function projectLocationToMap(location?: LiveLocation) {
+  if (!location || location.status !== "ready" || location.lat === undefined || location.lng === undefined) {
+    return { x: 370, y: 252 };
+  }
+
+  const x = 370 + (location.lng - indiranagarAnchor.lng) * 8500;
+  const y = 252 - (location.lat - indiranagarAnchor.lat) * 8500;
+
+  return {
+    x: Math.max(70, Math.min(650, x)),
+    y: Math.max(65, Math.min(395, y)),
+  };
+}
+
+function useBrowserLocation() {
+  const [location, setLocation] = useState<LiveLocation>(defaultLiveLocation);
+
+  const requestLocation = () => {
+    if (!("geolocation" in navigator)) {
+      setLocation({ status: "unsupported", message: "Live location is not supported in this browser" });
+      return;
+    }
+
+    setLocation({ status: "loading", message: "Requesting location permission…" });
+    navigator.geolocation.getCurrentPosition(
+      position => {
+        setLocation({
+          status: "ready",
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy,
+          updatedAt: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          message: "Live location active",
+        });
+      },
+      error => {
+        const denied = error.code === error.PERMISSION_DENIED;
+        setLocation({
+          status: denied ? "denied" : "error",
+          message: denied ? "Location permission was blocked" : "Could not read your live location",
+        });
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
+    );
+  };
+
+  return { location, requestLocation };
+}
+
 // ─── SMALL COMPONENTS ────────────────────────────────────────────────────────
 function StatusPill({ status }: { status: string }) {
   const cfg: Record<string, { bg: string; text: string; dot: string }> = {
@@ -339,7 +404,8 @@ function ProgressRing({ value, max, size = 100, stroke = 8 }: { value: number; m
 }
 
 // ─── MAP CANVAS ──────────────────────────────────────────────────────────────
-function MapCanvas({ compact = false }: { compact?: boolean }) {
+function MapCanvas({ compact = false, liveLocation }: { compact?: boolean; liveLocation?: LiveLocation }) {
+  const userPoint = projectLocationToMap(liveLocation);
   return (
     <div className="relative w-full h-full overflow-hidden" style={{ background: "#E5E7EB" }}>
       <svg viewBox="0 0 720 460" className="w-full h-full" style={{ display: "block" }}>
@@ -406,10 +472,10 @@ function MapCanvas({ compact = false }: { compact?: boolean }) {
         <text x="50" y="241" fill="#64748B" fontSize="7.5" fontFamily="Manrope, sans-serif" fontWeight="600">100 Feet Road</text>
         <text x="130" y="30" fill="#64748B" fontSize="7" fontFamily="Manrope, sans-serif" fontWeight="600" transform="rotate(90,130,30)">Defence Colony Rd</text>
         {/* User location */}
-        <circle cx="370" cy="252" r="28" fill="url(#userGlow)" />
-        <circle cx="370" cy="252" r="10" fill="#2563EB" opacity="0.18" />
-        <circle cx="370" cy="252" r="6" fill="#2563EB" />
-        <circle cx="370" cy="252" r="3" fill="#FFFFFF" />
+        <circle cx={userPoint.x} cy={userPoint.y} r="28" fill="url(#userGlow)" />
+        <circle cx={userPoint.x} cy={userPoint.y} r="10" fill="#2563EB" opacity="0.18" />
+        <circle cx={userPoint.x} cy={userPoint.y} r="6" fill="#2563EB" />
+        <circle cx={userPoint.x} cy={userPoint.y} r="3" fill="#FFFFFF" />
         {/* Issue pins */}
         {/* Critical - red */}
         <g filter="url(#pinShadow)">
@@ -460,12 +526,20 @@ function MapCanvas({ compact = false }: { compact?: boolean }) {
           ))}
         </div>
       )}
+      {!compact && liveLocation?.status === "ready" && (
+        <div className="absolute bottom-3 right-3 glass-sm rounded-xl px-3 py-2">
+          <div className="flex items-center gap-2 text-[10px] font-semibold text-[#0B1220]">
+            <Navigation size={12} className="text-[#2563EB]" />
+            Live: {liveLocation.lat?.toFixed(4)}, {liveLocation.lng?.toFixed(4)}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── PAGE: OVERVIEW ──────────────────────────────────────────────────────────
-function OverviewPage({ setPage }: { setPage: (p: string) => void }) {
+function OverviewPage({ setPage, liveLocation }: { setPage: (p: string) => void; liveLocation: LiveLocation }) {
   const [counted, setCounted] = useState(false);
   useEffect(() => { setTimeout(() => setCounted(true), 200); }, []);
 
@@ -518,7 +592,7 @@ function OverviewPage({ setPage }: { setPage: (p: string) => void }) {
             </button>
           </div>
           <div style={{ height: 260 }}>
-            <MapCanvas compact />
+            <MapCanvas compact liveLocation={liveLocation} />
           </div>
         </div>
 
@@ -657,10 +731,18 @@ function IssueCard({ issue, delay = 0 }: { issue: typeof ISSUES[0]; delay?: numb
 }
 
 // ─── PAGE: LIVE MAP ──────────────────────────────────────────────────────────
-function LiveMapPage() {
+function LiveMapPage({ liveLocation, requestLocation }: { liveLocation: LiveLocation; requestLocation: () => void }) {
   const [selected, setSelected] = useState<string | null>("KIN-2026-1801");
   const [activeFilter, setActiveFilter] = useState("All");
+  const [query, setQuery] = useState("");
+  const [insightsOpen, setInsightsOpen] = useState(true);
+  const [heatmapOpen, setHeatmapOpen] = useState(false);
   const filterTypes = ["All", "Water", "Electricity", "Waste", "Roads", "Drainage"];
+  const visibleIssues = ISSUES.filter(issue => {
+    const matchesFilter = activeFilter === "All" || issue.category === activeFilter;
+    const matchesQuery = `${issue.title} ${issue.location} ${issue.category}`.toLowerCase().includes(query.toLowerCase());
+    return matchesFilter && matchesQuery;
+  });
 
   return (
     <div className="flex h-[calc(100vh-64px)] overflow-hidden">
@@ -703,12 +785,25 @@ function LiveMapPage() {
               <span className="text-sm font-medium text-[#0B0F19]">Verified only</span>
             </label>
           </div>
-          <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-sm font-semibold mt-2">
+          <button onClick={() => setHeatmapOpen(v => !v)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl btn-primary text-sm font-semibold mt-2">
             <Layers size={14} /> Heatmap
           </button>
-          <button className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border border-[rgba(15,23,42,0.15)] text-[#0B1220] hover:bg-[#F1F5F9] transition-colors">
+          <button onClick={() => setInsightsOpen(v => !v)} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold border border-[rgba(15,23,42,0.15)] text-[#0B1220] hover:bg-[#F1F5F9] transition-colors">
             <Sparkles size={14} /> AI Insights
           </button>
+          <div className="rounded-2xl bg-[#F1F5F9] p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <Navigation size={14} className={liveLocation.status === "ready" ? "text-[#2563EB]" : "text-[#64748B]"} />
+              <span className="text-xs font-bold text-[#0B0F19]">Live location</span>
+            </div>
+            <p className="text-xs text-[#64748B] leading-relaxed">{liveLocation.message}</p>
+            {liveLocation.status === "ready" && (
+              <div className="mt-2 text-[10px] text-[#64748B] leading-relaxed">
+                <div>{liveLocation.lat?.toFixed(5)}, {liveLocation.lng?.toFixed(5)}</div>
+                <div>Accuracy: ±{Math.round(liveLocation.accuracy ?? 0)}m · {liveLocation.updatedAt}</div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -717,16 +812,36 @@ function LiveMapPage() {
         <div className="absolute top-4 left-4 right-4 z-10 flex gap-3">
           <div className="flex-1 glass rounded-xl flex items-center gap-2 px-4 py-2.5 card-shadow">
             <Search size={16} style={{ color: "#64748B" }} />
-            <input type="text" placeholder="Search an area, road, or issue..." className="bg-transparent flex-1 text-sm text-[#0B0F19] placeholder:text-[#64748B]" />
+            <input value={query} onChange={e => setQuery(e.target.value)} type="text" placeholder="Search an area, road, or issue..." className="bg-transparent flex-1 text-sm text-[#0B0F19] placeholder:text-[#64748B]" />
+          </div>
+          <button onClick={requestLocation} className="glass rounded-xl flex items-center gap-2 px-4 py-2.5 card-shadow text-sm font-semibold text-[#0B1220] hover:bg-white transition-colors">
+            <LocateIcon status={liveLocation.status} /> {liveLocation.status === "loading" ? "Locating…" : "Locate me"}
+          </button>
+          <div className="glass rounded-xl flex items-center gap-2 px-4 py-2.5 card-shadow text-xs font-semibold text-[#64748B]">
+            {visibleIssues.length} visible issues
           </div>
         </div>
-        <MapCanvas />
+        <MapCanvas liveLocation={liveLocation} />
+        {heatmapOpen && (
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_28%_38%,rgba(239,68,68,0.25),transparent_18%),radial-gradient(circle_at_62%_34%,rgba(37,99,235,0.22),transparent_20%),radial-gradient(circle_at_67%_68%,rgba(14,165,233,0.22),transparent_18%)]" />
+        )}
+        {insightsOpen && (
+          <div className="absolute left-4 bottom-4 glass rounded-2xl card-shadow p-4 max-w-sm">
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles size={15} className="text-[#2563EB]" />
+              <h3 className="font-display font-bold text-sm text-[#0B0F19]">AI map insight</h3>
+            </div>
+            <p className="text-xs text-[#64748B] leading-relaxed">
+              Water and waste reports are clustered near 12th Main and Defence Colony Park. Community verification is strongest for water issues.
+            </p>
+          </div>
+        )}
         {/* Clickable overlay pins */}
         {[
           { id: "KIN-2026-1801", x: "27%", y: "38%" },
           { id: "KIN-2026-1788", x: "58%", y: "31%" },
           { id: "KIN-2026-1774", x: "67%", y: "68%" },
-        ].map(pin => (
+        ].filter(pin => visibleIssues.some(issue => issue.id === pin.id)).map(pin => (
           <button key={pin.id}
             onClick={() => setSelected(selected === pin.id ? null : pin.id)}
             className="absolute w-8 h-8 rounded-full cursor-pointer border-2 border-white"
@@ -786,6 +901,13 @@ function LiveMapPage() {
       )}
     </div>
   );
+}
+
+function LocateIcon({ status }: { status: LiveLocation["status"] }) {
+  if (status === "loading") return <RefreshCw size={15} className="animate-spin text-[#2563EB]" />;
+  if (status === "ready") return <Navigation size={15} className="text-[#2563EB]" />;
+  if (status === "denied" || status === "error") return <AlertCircle size={15} className="text-[#E35D4F]" />;
+  return <MapPin size={15} className="text-[#2563EB]" />;
 }
 
 // ─── PAGE: REPORT ISSUE ──────────────────────────────────────────────────────
@@ -1655,7 +1777,7 @@ function KintsugiLogo() {
   );
 }
 
-function Navbar({ page, setPage }: { page: string; setPage: (p: string) => void }) {
+function Navbar({ page, setPage, liveLocation, requestLocation }: { page: string; setPage: (p: string) => void; liveLocation: LiveLocation; requestLocation: () => void }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
@@ -1688,9 +1810,9 @@ function Navbar({ page, setPage }: { page: string; setPage: (p: string) => void 
 
         <div className="flex items-center gap-2 ml-auto">
           {/* Location pill */}
-          <button className="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-xl glass-sm text-sm font-semibold text-[#0B0F19] hover:bg-[rgba(15,23,42,0.06)] transition-colors">
-            <MapPin size={14} className="text-[#0B1220]" />
-            <span className="hidden lg:inline">Indiranagar, Bengaluru</span>
+          <button onClick={requestLocation} className="hidden md:flex items-center gap-2 px-3.5 py-2 rounded-xl glass-sm text-sm font-semibold text-[#0B0F19] hover:bg-[rgba(15,23,42,0.06)] transition-colors" title={liveLocation.message}>
+            <LocateIcon status={liveLocation.status} />
+            <span className="hidden lg:inline">{liveLocation.status === "ready" ? `Live location ±${Math.round(liveLocation.accuracy ?? 0)}m` : "Indiranagar, Bengaluru"}</span>
             <ChevronDown size={13} className="text-[#64748B]" />
           </button>
 
@@ -1739,6 +1861,7 @@ function Navbar({ page, setPage }: { page: string; setPage: (p: string) => void 
 // ─── APP ─────────────────────────────────────────────────────────────────────
 export default function App() {
   const [page, setPage] = useState("overview");
+  const { location: liveLocation, requestLocation } = useBrowserLocation();
 
   return (
     <div className="min-h-screen bg-[#05070B] bg-noise relative">
@@ -1762,10 +1885,10 @@ export default function App() {
       </div>
 
       <div className="relative z-10">
-        <Navbar page={page} setPage={setPage} />
+        <Navbar page={page} setPage={setPage} liveLocation={liveLocation} requestLocation={requestLocation} />
         <main className="overflow-y-auto" style={{ minHeight: "calc(100vh - 64px)" }}>
-          {page === "overview" && <OverviewPage setPage={setPage} />}
-          {page === "map" && <LiveMapPage />}
+          {page === "overview" && <OverviewPage setPage={setPage} liveLocation={liveLocation} />}
+          {page === "map" && <LiveMapPage liveLocation={liveLocation} requestLocation={requestLocation} />}
           {page === "report" && <ReportIssuePage />}
           {page === "community" && <CommunityPage />}
           {page === "impact" && <ImpactPage />}

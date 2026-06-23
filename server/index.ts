@@ -63,7 +63,7 @@ app.post('/internal/agents/sla',asyncRoute(async(req,res)=>{if(req.headers['x-ag
 if(env.NODE_ENV==='production'){
   const dist=path.resolve(process.cwd(),'dist');
   app.use(express.static(dist,{maxAge:'1y',immutable:true,index:false}));
-  app.get('*',(_req,res)=>res.sendFile(path.join(dist,'index.html')));
+  app.get('/{*splat}',(_req,res)=>res.sendFile(path.join(dist,'index.html')));
 }
 app.use((err:any,_req:express.Request,res:express.Response,_next:express.NextFunction)=>{console.error(err);res.status(err.status??(err.name==='ZodError'?400:500)).json({error:err.status?err.message:'Request failed',details:err.name==='ZodError'?err.issues:undefined});});
 app.listen(env.PORT,()=>console.log(`Kintsugi API listening on ${env.PORT}`));
